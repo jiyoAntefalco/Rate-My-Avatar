@@ -1,0 +1,852 @@
+loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/jiyoAntefalco/Rate-My-Avatar/main/Supported%20Exploits", true))().Identify()
+
+local Categories = {
+	['Food & Drink'] = {
+		Category = 'food_and_drink',
+		Votes = 0,
+	},
+	['Film & TV'] = {
+		Category = 'film_and_tv',
+		Votes = 0,
+	},
+	['Music'] = {
+		Category = 'music',
+		Votes = 0,
+	},
+	['Geography'] = {
+		Category = 'geography',
+		Votes = 0,
+	},
+	['Society & Culture'] = {
+		Category = 'society_and_culture',
+		Votes = 0,
+	},
+	['Science'] = {
+		Category = 'science',
+		Votes = 0,
+	},
+	['Sport & Leisure'] = {
+		Category = 'sport_and_leisure',
+		Votes = 0,
+	},
+	['General Knowledge'] = {
+		Category = 'general_knowledge',
+		Votes = 0,
+	},
+	['Arts & Literature'] = {
+		Category = 'arts_and_literature',
+		Votes = 0,
+	},
+	['History'] = {
+		Category = 'history',
+		Votes = 0,
+	}
+}
+
+local CountOfQuestions = {
+	[5] = {
+		Votes = 0,
+	},
+	[10] = {
+		Votes = 0,
+	},
+	[15] = {
+		Votes = 0,
+	},
+	[20] = {
+		Votes = 0,
+	}
+}
+
+local Difficulties = {
+	['Hard'] = {
+		Votes = 0,
+	},
+	['Medium'] = {
+		Votes = 0,
+	},
+	['Easy'] = {
+		Votes = 0,
+	},
+}
+
+local Category = nil
+local QuestionCount = nil
+local SelectedDifficulty = nil
+
+local Images = {
+	['Timer'] = 11690286231,
+	['Leaderboard'] = 11690287087,
+	['Question'] = 11690286589,
+	['Beginning'] = 11690287559,
+	['Winner'] = 11690285887,
+}
+
+local LettersNeeded = {
+	['a'] = true,
+	['b'] = true,
+	['c'] = true,
+	['d'] = true,
+}
+
+local ShuffledAnswers
+local Answers = 0
+local Timer = 10
+
+local Participants = {}
+local Functions = {}
+
+local ReplicatedStorage = game:GetService('ReplicatedStorage')
+local CustomiseBooth = ReplicatedStorage.CustomiseBooth
+
+local ChatEvents = ReplicatedStorage:WaitForChild("DefaultChatSystemChatEvents", math.huge)
+local OnMessageEvent = ChatEvents:WaitForChild("OnMessageDoneFiltering", math.huge)
+
+local Players = game:GetService('Players')
+local LocalPlayer = Players.LocalPlayer
+
+local Events = {
+	ChattedEvent = nil,
+	PublicChatEvent = nil,
+}
+
+local Prefix = (":")
+local SkippedReason = ("Error Found")
+
+local GameBegan = false
+local GameEnded = true
+local Skipped = false
+local IsVoting = false
+
+local Votings = {
+	Difficulty = {
+		Current = nil,
+		Max = 3,
+	},
+	Question = {
+		Current = nil,
+		Max = 3,
+	},
+	Category = {
+		Current = nil,
+		Max = 3,
+	},
+	Skips = {
+		Votes = 0,
+		Max = 3,
+	}
+}
+
+local CommandList = {
+	['Hashtag'] = true,
+	['Error'] = true,
+	['Text Filter'] = true
+}
+
+local function TBS(io, Str, Type)
+	local Lower = Str:lower()
+	if (Type == 'Return') then
+		for Name, v in pairs(io) do
+			if Name:lower():sub(0, Lower:len()) == Lower then
+				return v, Name
+			end
+		end
+	elseif (Type == 'Search') then
+		for Name, v in pairs(io) do
+			if v.Name:lower():sub(0, Lower:len()) == Lower or v.DisplayName:lower():sub(0, Lower:len()) == Lower then
+				return v, v.Name
+			end
+		end
+	end
+	return nil, nil
+end
+
+local function EditBooth(Text, Image)
+	local args = {
+    	[1] = "Update",
+    	[2] = {
+	        ["DescriptionText"] = Text,
+	        ["ImageId"] = Image,
+	    }
+	}
+
+	CustomiseBooth:FireServer(unpack(args))
+end
+
+local function Edit(Type)
+	if (Type == 'CategoryList' and Category == nil) then
+		local ToEditOption = Votings.Category
+		local ListOfCategories = "[TRIVIA ✨]\n· Vote For Categories \n· Command Guide\n"..Prefix.."vote (Category)\n"
+		EditBooth(ListOfCategories, Images.Beginning)
+		
+		for names, v in pairs(Categories) do
+			ListOfCategories = ListOfCategories.."\n· "..names.." ["..v.Votes.."/"..ToEditOption.Max.."]"
+			EditBooth(ListOfCategories, Images.Beginning)
+		end
+	elseif (Type == 'QuestionList' and QuestionCount == nil) then
+		local ToEditOption = Votings.Question
+		local ListOfQuestionCount = "[TRIVIA ✨]\n· How many Questions?\n· Command Guide\n"..Prefix.."question (5 - 20)\n"
+		EditBooth(ListOfQuestionCount, Images.Beginning)
+		
+		for names, v in pairs(CountOfQuestions) do
+			ListOfQuestionCount = ListOfQuestionCount.."\n· Question "..names.." ["..v.Votes.."/"..ToEditOption.Max.."]"
+			EditBooth(ListOfQuestionCount, Images.Beginning)
+		end
+	elseif (Type == 'DifficultyList' and SelectedDifficulty == nil) then
+		local ToEditOption = Votings.Difficulty
+		local ListOfDifficulties = "[TRIVIA ✨]\n· What difficulty?\n· Command Guide\n"..Prefix.."difficulty (?)\n"
+		EditBooth(ListOfDifficulties, Images.Beginning)
+		
+		for names, v in pairs(Difficulties) do
+			ListOfDifficulties = ListOfDifficulties.."\n· "..names.." ["..v.Votes.."/"..ToEditOption.Max.."]"
+			EditBooth(ListOfDifficulties, Images.Beginning)
+		end
+	end
+end
+
+local List = {
+	CategoryList = true,
+	QuestionList = true,
+	DifficultyList = true,
+}
+
+local function PlayerChatted(Chat, player)
+	local Lower = string.lower(Chat)
+	if (Chat) then
+		if (GameBegan) then
+			if (Participants[player] ~= nil) then
+				local ParticipantPlayer = Participants[player]
+				if (LettersNeeded[Lower] == true and not ParticipantPlayer.Answer) then
+					ParticipantPlayer.Answer = Lower
+					Answers = Answers + 1
+				end
+			else
+				if (LettersNeeded[Lower] == true) then
+					Participants[player] = {
+						Answer = nil,
+						Score = 0,
+						PlayerVotedOne = false,
+						PlayerVotedTwo = false,
+						PlayerVotedThree = false,
+					}
+					local ParticipantPlayer = Participants[player]
+					if (not ParticipantPlayer.Answer) then
+						ParticipantPlayer.Answer = Lower
+						Answers = Answers + 1
+					end
+				end
+			end
+		end
+	end
+end
+
+local function VotingChat(Chat, player)
+	local Lower = Chat:lower()
+	if (Lower:sub(1, 6) == Prefix..'vote ') then
+		if (GameBegan == false and IsVoting == true and Category == nil) then
+			local ChosenCategory = Chat:sub(7)
+			local CategoryDetails, CategoryName = TBS(Categories, ChosenCategory, 'Return')
+			local VotingsOption = Votings.Category
+			if (CategoryDetails) then
+				if (Participants[player] ~= nil) then
+					local Received = Categories[CategoryName]
+					local ParticipantPlayer = Participants[player]
+					if (ParticipantPlayer.PlayerVotedOne == false and Received.Votes ~= VotingsOption.Max) then
+						ParticipantPlayer.PlayerVotedOne = true
+						Received.Votes = Received.Votes + 1
+						Edit('CategoryList')
+					end
+				else
+					Participants[player] = {
+						Answer = nil,
+						Score = 0,
+						PlayerVotedOne = false,
+						PlayerVotedTwo = false,
+						PlayerVotedThree = false,
+					}
+					
+					local ParticipantPlayer = Participants[player]
+					local Received = Categories[CategoryName]
+					if (ParticipantPlayer.PlayerVotedOne == false and Received.Votes ~= VotingsOption.Max) then
+						ParticipantPlayer.PlayerVotedOne = true
+						Received.Votes = Received.Votes + 1
+						Edit('CategoryList')
+					end
+				end
+			end
+		end
+	elseif (Lower:sub(1, 10) == Prefix..'question ') then
+		if (GameBegan == false and IsVoting == true and QuestionCount == nil) then
+			local ChosenQuestionCount = tonumber(Chat:sub(11))
+			local VotingsOption = Votings.Question
+			if (Participants[player] ~= nil and ChosenQuestionCount) then
+				local Received = CountOfQuestions[ChosenQuestionCount]
+				local ParticipantPlayer = Participants[player]
+				if (ParticipantPlayer.PlayerVotedTwo == false and Received.Votes ~= VotingsOption.Max) then
+					ParticipantPlayer.PlayerVotedTwo = true
+					Received.Votes = Received.Votes + 1
+					Edit('QuestionList')
+				end
+			else
+				if (ChosenQuestionCount) then
+					Participants[player] = {
+						Answer = nil,
+						Score = 0,
+						PlayerVotedOne = false,
+						PlayerVotedTwo = false,
+						PlayerVotedThree = false,
+					}
+					
+					local ParticipantPlayer = Participants[player]
+					local Received = CountOfQuestions[ChosenQuestionCount]
+					if (ParticipantPlayer.PlayerVotedTwo == false and Received.Votes ~= VotingsOption.Max) then
+						ParticipantPlayer.PlayerVotedTwo = true
+						Received.Votes = Received.Votes + 1
+						Edit('QuestionList')
+					end
+				end
+			end
+		end
+	elseif (Lower:sub(1, 12) == Prefix..'difficulty ') then
+		if (GameBegan == false and IsVoting == true and SelectedDifficulty == nil) then
+			local ChosenDifficulty = Chat:sub(13)
+			local DifficultyDetails, DifficultyName = TBS(Difficulties, ChosenDifficulty, 'Return')
+			local VotingsOption = Votings.Difficulty
+			if (DifficultyDetails) then
+				print(DifficultyDetails, DifficultyName)
+				if (Participants[player] ~= nil) then
+					local Received = Difficulties[DifficultyName]
+					local ParticipantPlayer = Participants[player]
+					
+					if (ParticipantPlayer.PlayerVotedThree == false and Received.Votes ~= VotingsOption.Max) then
+						ParticipantPlayer.PlayerVotedThree = true
+						Received.Votes = Received.Votes + 1
+						print('Voted')
+						Edit('DifficultyList')
+					end
+				else
+					Participants[player] = {
+						Answer = nil,
+						Score = 0,
+						PlayerVotedOne = false,
+						PlayerVotedTwo = false,
+						PlayerVotedThree = false,
+					}
+					local ParticipantPlayer = Participants[player]
+					local Received = Difficulties[DifficultyName]
+					
+					if (ParticipantPlayer.PlayerVotedThree == false and Received.Votes ~= VotingsOption.Max) then
+						ParticipantPlayer.PlayerVotedThree = true
+						Received.Votes = Received.Votes + 1
+						print('Voted')
+						Edit('DifficultyList')
+					end
+				end
+			end
+		end
+	end
+end
+
+local function PublicChat(Chat)
+	local Lower = Chat:lower()
+	if (Lower == Prefix..'trivia') then
+		if (IsVoting == false and GameBegan == false and GameEnded == true) then
+			Functions:BeginTrivia(5, 16)
+		end
+	end
+end
+
+Events.PublicChatEvent = OnMessageEvent.OnClientEvent:Connect(function(Data)
+	VotingChat(tostring(Data.Message), tostring(Data.FromSpeaker))
+	PlayerChatted(tostring(Data.Message), tostring(Data.FromSpeaker))
+	PublicChat(tostring(Data.Message))
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+	if (Participants[player.Name]) then
+		Participants[player.Name] = nil
+	end
+end)
+
+local function GenerateQuestion(QC, CC, SD)
+	local HttpService = game:GetService('HttpService')
+	if (ChosenCategory ~= nil) then
+		return HttpService:JSONDecode(game:HttpGet("https://the-trivia-api.com/api/questions?limit="..QC.."&difficulty="..SD, true))
+	else
+		return HttpService:JSONDecode(game:HttpGet("https://the-trivia-api.com/api/questions?categories="..CC.."&limit="..QC.."&difficulty="..SD, true))
+	end
+end
+
+local function Format(toformat)
+	local question, num = string.gsub(toformat, "&quot;", "")
+	local newQuestion, num2 = string.gsub(question, "&#039;", "")
+	local newQuestion2, num3 = string.gsub(newQuestion, "&amp;", "")
+	return newQuestion2
+end
+
+local function Shuffle(CorrectAnswer, io)
+	if (CorrectAnswer and typeof(io) == 'table' and #io > 0) then
+		local ShuffledTable = {}
+		local TableToShuffle = {
+			io[1],
+			io[2],
+			io[3],
+			CorrectAnswer,
+		}
+	
+		local numeral = 0
+	
+		for Index = 1, #TableToShuffle do
+			local RandomIndex = math.random(#TableToShuffle)
+			table.insert(ShuffledTable, TableToShuffle[RandomIndex])
+			table.remove(TableToShuffle, RandomIndex)
+		end
+	
+		return {
+			['a'] = ShuffledTable[1],
+			['b'] = ShuffledTable[2],
+			['c'] = ShuffledTable[3],
+			['d'] = ShuffledTable[4],
+		}
+	else
+		return nil
+	end
+end
+
+local function GetRightAnswer(correctAns, io)
+	local correctAnswer
+	for letter, v in pairs(io) do
+		if (v == correctAns) then
+			correctAnswer = letter
+			break
+		end
+	end
+	return correctAnswer
+end
+
+local function toMS(s)
+	return string.format("%02i:%02i", s/60%60, s%60)
+end
+
+local function GetUserDisplayName(User)
+	local io = {User}
+	local UserService = game:GetService('UserService')
+	local Info = UserService:GetUserInfosByUserIdsAsync(io)
+	return Info[1].DisplayName
+end
+
+local function FormatDifficulty(Difficulty)
+	if (Difficulty) then
+		return string.sub(Difficulty, 1, 1):upper()..string.sub(Difficulty, 2)
+	end
+	return Difficulty
+end
+
+local function ClearAnswersForAll()
+	for names, v in pairs(Participants) do
+		if (Participants[names]) then
+			v.Answer = nil
+		end
+	end
+end
+
+local function BlacklistBooth(Username, Type)
+	if (Type == "Block") then
+		local args = {
+		    [1] = "AddBlacklist",
+		    [2] = Username
+		}
+		if pcall(function() CustomiseBooth:FireServer(unpack(args)) end) then
+			warn('[Added To Blacklist]: Blocked ('..Username..')')
+		end
+	elseif (Type == "Unblock") then
+		local args = {
+		    [1] = "RemoveBlacklist",
+		    [2] = Username
+		}
+		if pcall(function() CustomiseBooth:FireServer(unpack(args)) end) then
+			warn('[Removed From Blacklist]: Unblocked ('..Username..')')
+		end
+	end
+end
+
+function Functions:BeginTrivia(StartTime, TimeToAnswer)
+	IsVoting = true
+	
+	local Selected = {
+		Category = nil,
+		QuestionCount = nil,
+		SelectedDifficulty = nil,
+	}
+	
+	Edit("CategoryList")
+
+	repeat
+		local Option = Votings.Category 
+		for names, v in pairs(Categories) do
+			if (v.Votes == Option.Max) then
+				Option.Current = v.Category
+				Selected.Category = names
+				break
+			end
+		end
+		wait(1) 
+	until typeof(Votings.Category.Current) == 'string'
+	
+	Category = Votings.Category.Current
+	
+	EditBooth("[TRIVIA ✨]\n· Selected Category\n("..Selected.Category..")")
+	
+	wait(2.3)
+
+	Edit("QuestionList")
+
+	repeat 
+		local Option = Votings.Question
+		for names, v in pairs(CountOfQuestions) do
+			if (v.Votes == Option.Max) then
+				Option.Current = tonumber(names)
+				Selected.QuestionCount = tonumber(names)
+				break
+			end
+		end
+		wait(1)
+	until typeof(Votings.Question.Current) == 'number'
+	
+	QuestionCount = Votings.Question.Current
+	
+	EditBooth("[TRIVIA ✨]\n· Selected Question Count\n("..Selected.QuestionCount..")")
+	
+	wait(2.3)
+	
+	Edit("DifficultyList")
+
+	repeat 
+		local Option = Votings.Difficulty
+		for names, v in pairs(Difficulties) do
+			if (v.Votes == Option.Max) then
+				Option.Current = names:lower()
+				Selected.SelectedDifficulty = names
+				break
+			end
+		end
+		wait(1) 
+	until typeof(Votings.Difficulty.Current) == 'string'
+	
+	SelectedDifficulty = Votings.Difficulty.Current
+	
+	EditBooth("[TRIVIA ✨]\n· Selected Difficulty\n("..Selected.SelectedDifficulty..")")
+	
+	wait(2.3)
+	
+	
+	GameEnded = false
+	GameBegan = true
+	IsVoting = false
+	
+	for i = 1, StartTime - 2 do
+		wait(0.2)
+		EditBooth('[TRIVIA ✨]\n· Computing. ·', Images.Beginning)
+		wait(0.2)
+		EditBooth('[TRIVIA ✨]\n· Computing.. ·', Images.Beginning)
+		wait(0.2)
+		EditBooth('[TRIVIA ✨]\n· Computing... ·', Images.Beginning)
+		wait(0.2)
+		EditBooth('[TRIVIA ✨]\n· Computing ·', Images.Beginning)
+	end
+	
+	EditBooth('[TRIVIA ✨]\n· ... ·', Images.Beginning)
+
+	for i = Timer, 0, -1 do wait(1)
+		EditBooth('[TRIVIA ✨]\n· Starting In ·\n'..toMS(i), Images.Beginning)
+	end
+		
+	local Question = GenerateQuestion(QuestionCount, Category, SelectedDifficulty)
+
+	for q = 1, #Question do
+	
+		if (GameEnded) then
+			EditBooth('[TRIVIA ✨]\n· Game Ended By The Host\n@'..LocalPlayer.DisplayName, Images.Beginning)
+			Participants = {}
+			break
+		end
+	
+		for i = StartTime, 0, -1 do
+			EditBooth('[TRIVIA ✨]\n[QUESTION NO. '..q..' OUT OF '..QuestionCount..']\n\n· Will Begin In '..i..' Seconds ·\n\n'..'Required Letters Only: \nA, B, C, D', Images.Beginning)
+			wait(1)
+		end
+
+		GameBegan = true
+		
+		local Received = Question[tonumber(q)]
+		local IncorrectAnswers = Received.incorrectAnswers
+		local CorrectAnswer = Received.correctAnswer
+		local FormattedQuestion = Received.question
+		
+		ShuffledAnswers = Shuffle(CorrectAnswer, IncorrectAnswers)
+		
+		if (not ShuffledAnswers) then
+			if (Skipped == false) then
+				Skipped = true
+			end
+		end
+		
+		local gotAnswer = GetRightAnswer(CorrectAnswer, ShuffledAnswers)
+		
+		warn("Answer: "..gotAnswer:upper()..". "..ShuffledAnswers[gotAnswer])
+
+		for x = TimeToAnswer, 0, -1 do
+			if (Skipped == true) then
+				ClearAnswersForAll()
+				break
+			end
+			EditBooth("Category | "..Received.category.."\nDifficulty | "..FormatDifficulty(Received.difficulty).."\nQ No. "..q..": "..FormattedQuestion.."\n".."A. "..Format(ShuffledAnswers['a']).."\nB. "..Format(ShuffledAnswers['b']).."\nC. "..Format(ShuffledAnswers['c']).."\nD. "..Format(ShuffledAnswers['d']).."\n\n("..toMS(x)..")", Images.Question)
+			wait(1)
+		end
+
+		if (Answers ~= 0 and not Skipped) then
+			local List = "Correct Answer:\n"..gotAnswer:upper().."."
+			local Leaderboard = "Leaderboard\n"
+			
+			EditBooth(List, Images.Beginning)
+			
+			for names, v in pairs(Participants) do
+				if (Participants[names] ~= nil and v.Answer) then
+					if (v.Answer == gotAnswer) then
+						local GetDisplay = GetUserDisplayName(Players:GetUserIdFromNameAsync(names))
+						List = List.."\n· "..GetDisplay.."'s Answer:\n✔️ "..v.Answer:upper().." +1"
+						EditBooth(List, Images.Leaderboard)
+						Participants[names].Score = Participants[names].Score + 1
+						Participants[names].Answer = nil
+					else
+						local GetDisplay = GetUserDisplayName(Players:GetUserIdFromNameAsync(names))
+						List = List.."\n· "..GetDisplay.."'s Answer:\n❌ "..v.Answer:upper()
+						EditBooth(List, Images.Leaderboard)
+						Participants[names].Answer = nil
+					end
+				end
+				
+				wait(0.006)
+			end
+			
+			wait(4)
+	
+			for names, v in pairs(Participants) do
+				if (Participants[names]) then
+					local GetDisplay = GetUserDisplayName(Players:GetUserIdFromNameAsync(names))
+					if (v.Score) then
+						Leaderboard = Leaderboard.."\n"..GetDisplay.." 💠 ("..v.Score.."/"..QuestionCount..")"
+						EditBooth(Leaderboard, Images.Winner)
+					end
+				end
+				
+				wait(0.006)
+			end
+			
+			wait(4)
+		else
+			if (not Skipped) then
+				EditBooth("[TIMES-UP]\nNo One Got To Answer!", Images.Timer)
+				wait(4)
+			else
+				EditBooth("[TRIVIA ✨]\n"..SkippedReason.." Found\n\nSkipped Question\nNo. "..q, Images.Beginning)
+				wait(3)
+			end
+		end
+
+		wait()
+
+		Skipped = false
+		GameBegan = false
+		Answers = 0
+	end
+	if (not GameEnded) then
+		local WinnersList = {}
+		local ioTable = {}
+		
+		for i,v in pairs(Participants) do
+			if (Participants[i]) then
+				table.insert(ioTable, v.Score)
+			end
+		end
+		
+		for i, v in pairs(Participants) do
+			if (v.Score > 0 and math.max(unpack(ioTable)) == v.Score) then
+				table.insert(WinnersList, 
+					{
+						Name = GetUserDisplayName(Players:GetUserIdFromNameAsync(i)),
+						Score = v.Score,
+					}
+				)
+			end
+		end
+			
+		if (#WinnersList == 0) then
+			EditBooth("[💀] Nobody Won!", Images.Winner)
+		elseif (#WinnersList == 1) then
+			local v = WinnersList[1]
+			EditBooth("[Winner 🏆]\n@"..v.Name.." with a score: ("..v.Score.."/"..QuestionCount..")")
+		else
+			local ListOfWinners = ("[Winners 🏆]\n")
+			for i, v in pairs(WinnersList) do
+				ListOfWinners = (ListOfWinners.."\n"..v.Name.." with a score: ("..v.Score.."/"..QuestionCount..")")
+			end
+			EditBooth(ListOfWinners)
+		end
+		
+		for names, v in pairs(Participants) do
+			if (Participants[names]) then
+				v.PlayerVotedOne = false
+				v.PlayerVotedTwo = false
+				v.PlayerVotedThree = false
+			end
+		end
+		
+		wait(6)
+	end
+
+	for names, v in pairs(CountOfQuestions) do
+		v.Votes = 0
+	end
+	
+	for names, v in pairs(Categories) do
+		v.Votes = 0
+	end
+	
+	for names, v in pairs(Difficulties) do
+		v.Votes = 0
+	end
+	
+	for _, Options in pairs(Votings) do
+		Options.Current = nil
+	end
+	
+	ClearAnswersForAll()
+	
+	QuestionCount = nil
+	Category = nil
+	SelectedDifficulty = nil
+	
+	GameEnded = true
+	Skipped = false
+	Participants = {}
+	
+	EditBooth("[TRIVIA ✨]\n· Type '"..Prefix.."Trivia' To Start.", Images.Beginning)
+end
+
+-- Chat "begin" to begin the game.
+-- Chat "end" to end the game.
+-- Script Originally Made by jiyo Aka. Acromosity (ROBLOX)
+-- Discord: jiyo#1660
+
+Events.ChattedEvent = LocalPlayer.Chatted:Connect(function(Chat)
+	local Lower = Chat:lower()
+	local Splitted = Lower:split(" ")
+	
+	if (Splitted[1] == Prefix.."end") then
+		if (GameEnded == false and GameBegan == true) then
+			GameEnded = true
+			GameBegan = false
+			IsVoting = false
+			EditBooth('[TRIVIA ✨]\n· Game Ended By The Host \n@'..LocalPlayer.DisplayName, Images.Beginning)
+		end
+	elseif (Splitted[1] == Prefix.."skip") then
+		local Provided = Splitted[2]
+		
+		if (Provided ~= nil) then
+			local Bool, Name = TBS(CommandList, Provided, 'Return')
+			if (Bool ~= nil and Bool == true) then
+				if (GameBegan and Skipped == false) then
+					SkippedReason = (Name)
+					Skipped = true
+				end
+			end
+		else
+			if (GameBegan and Skipped == false) then
+				SkippedReason = ("Error")
+				Skipped = true
+			end
+		end
+	elseif (Splitted[1] == Prefix.."delete") then
+		if (GameBegan == false and Events.ChattedEvent and Events.PublicChatEvent) then
+			GameEnded = true
+			GameBegan = false
+			IsVoting = false
+
+			Events.ChattedEvent:Disconnect()
+			Events.PublicChatEvent:Disconnect()
+			
+			Events.ChattedEvent = nil
+			Events.PublicChatEvent = nil
+
+			EditBooth('[TRIVIA ✨]\n· The Host @'..LocalPlayer.DisplayName..'\nHas deleted the script the booth will no longer be functional.', Images.Beginning)
+			script:Destroy()
+		end
+	elseif (Splitted[1] == Prefix.."prefix") then
+		if (GameBegan == false or IsVoting == true) then
+			local NewPrefix = Splitted[2]
+			
+			if (NewPrefix) then
+				if (NewPrefix:len() > 0 and NewPrefix:len() == 1) then
+					Prefix = NewPrefix
+					warn("[Modified]: Prefix has been set to ("..Prefix..")")
+				else
+					warn("[Modification Error]: Prefix requires 1 digit to be changed.")
+				end
+			end
+		end
+	elseif (Splitted[1] == Prefix.."refresh" and IsVoting == true) then
+		local ListName = Splitted[2]
+		
+		if (ListName) then
+			local ListInfo, CurrentList = TBS(List, ListName, 'Return')
+			if (ListInfo ~= nil and ListInfo == true) then
+				Edit(CurrentList)
+			end
+		end
+	elseif (Splitted[1] == Prefix.."block") then
+		local Victim = Splitted[2]
+		
+		if (Victim) then
+			local PlayerInfo, Name = TBS(Players:GetPlayers(), Victim, 'Search')
+			
+			if (PlayerInfo ~= nil) then
+				BlacklistBooth(PlayerInfo.Name, "Block")
+			else
+				warn('[Search]: Failed Player '..Victim..' Does not exist')
+			end
+		else
+			warn('[Search]: No Provided Username To Search')
+		end
+	elseif (Splitted[1] == Prefix.."unblock") then
+		local Victim = Splitted[2]
+		
+		if (Victim) then
+			local PlayerInfo, Name = TBS(Players:GetPlayers(), Victim, 'Search')
+			
+			if (PlayerInfo ~= nil) then
+				BlacklistBooth(PlayerInfo.Name, "Unblock")
+			else
+				warn('[Search]: Failed Player '..Victim..' Does not exist')
+			end
+		else
+			warn('[Search]: No Provided Username To Search')
+		end
+	elseif (Splitted[1] == Prefix.."maxvote" and IsVoting == true) then
+		local NameOfVote, SetToNum = Splitted[2], Splitted[3]
+		local VotingData, returnName = TBS(Votings, NameOfVote, 'Return')
+		if (VotingData ~= nil) then
+			local VoteOption = Votings[returnName]
+			local Numeral = tonumber(SetToNum)
+			if (Numeral ~= nil and VoteOption ~= nil) then
+				VoteOption.Max = Numeral
+				Edit(returnName.."List")
+				warn("[Modified]: Set ("..returnName..")'s Max Vote To "..Numeral)
+			end
+		end
+	end
+end)
+
+EditBooth("[TRIVIA ✨]\n· Type '"..Prefix.."Trivia' To Start.", Images.Beginning)
+
+warn('Trivia Booth: Functional')
