@@ -1,4 +1,4 @@
-loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/jiyoAntefalco/Rate-My-Avatar/main/Supported%20Exploits", true))().Identify()
+--loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/jiyoAntefalco/Rate-My-Avatar/main/Supported%20Exploits", true))().Identify()
 
 local Categories = {
 	['Food & Drink'] = {
